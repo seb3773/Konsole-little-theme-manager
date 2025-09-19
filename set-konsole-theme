@@ -1,0 +1,152 @@
+#!/bin/bash
+RD='\033[0;31m';GR='\033[0;32m';YW='\033[1;33m';BL='\033[0;34m'
+PR='\033[0;35m';CY='\033[0;36m';WH='\033[1;37m';NC='\033[0m'
+check_deps() {
+local d=("dcop" "whiptail" "find" "sed" "basename" "readlink" "sort" "shuf")
+for cmd in "${d[@]}"; do
+if ! command -v "$cmd" &> /dev/null; then
+echo -e "${RD}Error: Required command '$cmd' is not installed.${NC}" >&2
+exit 1
+fi
+done
+}
+check_deps
+if [ -z "$KONSOLE_DCOP_SESSION" ]; then
+echo -e "${RD}Error: This script must be run from within a *Konsole* session.${NC}" >&2
+exit 1
+fi
+temp=${KONSOLE_DCOP_SESSION#DCOPRef(}
+temp=${temp%)}
+KONSAPP=${temp%,*}
+KSESS=${temp#*,}
+SYSPATH="/opt/trinity/share/apps/konsole"
+USERPATH="$HOME/.trinity/share/apps/konsole"
+apply_theme() {
+local th_apply="$1"
+if [ -z "$th_apply" ]; then return; fi
+dcop "$KONSAPP" "$KSESS" setSchema "$th_apply.schema"
+if [ $? -eq 0 ]; then
+echo -e "${GR}✓ Theme '${CY}$th_apply${GR}' applied to ${YW}$KONSAPP${GR} / ${YW}$KSESS${GR}.${NC}"
+else
+echo -e "${RD}✗ Failed to apply theme '${CY}$th_apply${RD}' to ${YW}$KONSAPP${RD} / ${YW}$KSESS${RD}.${NC}" >&2
+fi
+}
+show_help() {
+local script_name
+local command_path
+local script_real_path
+local script_call
+script_name=$(basename "$0")
+command_path=$(command -v "$script_name")
+script_real_path=$(readlink -f "$0")
+if [ -n "$command_path" ] && [ "$command_path" == "$script_real_path" ]; then
+script_call="$script_name"
+else
+script_call="./$script_name"
+fi
+echo -e "${PR}  ╔═══════════════════════════════════════╗${NC}"
+echo -e "${PR}  ║${NC} ${CY}Trinity Konsole little themes manager${NC} ${PR}║${NC}"
+echo -e "${PR}  ║${NC} ${CY}●▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬๑o๑▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬●${NC} ${PR}║${NC}"
+echo -e "${PR}  ║${NC} ${YW}By seb3773${NC}                            ${PR}║${NC}"
+echo -e "${PR}  ╚═══════════════════════════════════════╝${NC}";echo ""
+echo -e "${WH} ► Usage:${NC} ${GR}$script_call${NC} [command] [options]";echo ""
+echo -e "${WH} ► Commands:${NC}"
+echo -e "    ${CY}<ThemeName>${NC}\t\t\t■ Apply a theme directly"
+echo -e "\t\t\t\t  (e.g., '${GR}$script_call Dracula${NC}')."
+echo -e "    ${CY}list | -list${NC} [keyword]\t■ Show interactive menu to select a theme,"
+echo -e "  \t\t\t\t  optionally filtered by a keyword."
+echo -e "    ${CY}random | -random${NC}\t\t■ Apply a random theme."
+echo -e "    ${CY}install | -install${NC} PATH\t■ Install .schemas(themes) from PATH."
+echo -e "    ${CY}help | -help${NC} | (none)\t■ Show this help message.";echo ""
+}
+echo ""
+case "$1" in
+"" | "help" | "-help")
+show_help
+;;
+"list" | "-list")
+keyword="$2"
+all_theme_names=$(find "$SYSPATH" "$USERPATH" -name "*.schema" -type f 2>/dev/null | sed 's/.*\///;s/\.schema$//' | sort -u)
+if [ -n "$keyword" ]; then
+all_theme_names=$(echo "$all_theme_names" | grep -i -- "$keyword")
+fi
+if [ -z "$all_theme_names" ]; then
+echo -e "${YW}No schemas found matching your criteria.${NC}";echo ""
+exit 1
+fi
+MENU_TEXT="Choose a theme for $KONSAPP / $KSESS:"
+THEME_LIST=()
+while read -r THEME_NAME; do
+THEME_LIST+=("$THEME_NAME" "")
+done <<< "$all_theme_names"
+CHOSEN_THEME=$(whiptail --title "Konsole Theme Selector" --menu "$MENU_TEXT" 20 78 12 "${THEME_LIST[@]}" 3>&1 1>&2 2>&3)
+if [ $? -eq 0 ]; then
+apply_theme "$CHOSEN_THEME"
+else
+echo -e "${YW}Selection canceled.${NC}";echo ""
+fi
+;;
+"random" | "-random")
+all_theme_names=$(find "$SYSPATH" "$USERPATH" -name "*.schema" -type f 2>/dev/null | sed 's/.*\///;s/\.schema$//' | sort -u)
+if [ -z "$all_theme_names" ]; then
+echo -e "${RD}No themes found to choose from.${NC}" >&2;echo ""
+exit 1
+fi
+random_theme=$(echo "$all_theme_names" | shuf -n 1)
+echo -e "${BL}Applying random theme: ${CY}$random_theme${NC}"
+apply_theme "$random_theme"
+echo ""
+;;
+"install" | "-install")
+INSTALL_PATH="$2"
+if [ -z "$INSTALL_PATH" ]; then
+echo -e "${RD}Error: You must provide a path for the 'install' command.${NC}" >&2
+echo -e "${YW}Usage: $0 install /path/to/your/schemas${NC}" >&2;echo ""
+exit 1
+fi
+if [ ! -d "$INSTALL_PATH" ]; then
+echo -e "${RD}Error: Directory '$INSTALL_PATH' not found.${NC}" >&2;echo ""
+exit 1
+fi
+SCHEMA_FILES=("$INSTALL_PATH"/*.schema)
+if [ ! -f "${SCHEMA_FILES[0]}" ]; then
+echo -e "${YW}No schema files to install in path '$INSTALL_PATH'.${NC}" >&2;echo ""
+exit 1
+fi
+if ! command -v whiptail &> /dev/null; then
+echo -e "${RD}Error: 'whiptail' is required for the install command.${NC}" >&2;echo ""
+exit 1
+fi
+LIST=()
+for f in "${SCHEMA_FILES[@]}"; do
+LIST+=("$(basename "$f")" "")
+done
+CHOICE=$(whiptail --title "Install New Schema" --menu "Select a schema to install:" 20 78 12 "${LIST[@]}" 3>&1 1>&2 2>&3)
+if [ $? -eq 0 ]; then
+SOURCE_FILE="$INSTALL_PATH/$CHOICE"
+DEST_PATH="$USERPATH/"
+mkdir -p "$DEST_PATH"
+cp "$SOURCE_FILE" "$DEST_PATH"
+if [ $? -eq 0 ]; then
+echo -e "${GR}✓ Installation successful.${NC}";echo ""
+N_ONLY=$(basename "$CHOICE" .schema)
+apply_theme "$N_ONLY"
+else
+echo -e "${RD}✗ Installation failed.${NC}" >&2;echo ""
+fi
+else
+echo -e "${YW}Installation canceled.${NC}";echo ""
+fi
+;;
+*)
+TH_APPLY=${1%.schema}
+if [ -f "$SYSPATH/$TH_APPLY.schema" ] || [ -f "$USERPATH/$TH_APPLY.schema" ]; then
+apply_theme "$TH_APPLY"
+else
+echo -e "${RD}Error: Theme '$1' not found in system or user directories.${NC}" >&2
+echo -e "${YW}Run '$0 help' for usage.${NC}";echo ""
+exit 1
+fi
+;;
+esac
+exit 0
