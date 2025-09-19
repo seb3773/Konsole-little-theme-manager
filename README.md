@@ -96,3 +96,9 @@ An interactive menu will ask you which specific theme you want to install.
 
 Enjoy :-)
 
+| **Help** |  
+ ![Main Interface](https://github.com/seb3773/Konsole-little-theme-manager/blob/main/screenshots/konsole_theme_manager_scr1.jpg?raw=true) |  
+| **Selection in a list** |  
+ ![Themes](https://github.com/seb3773/Konsole-little-theme-manager/blob/main/screenshots/konsole_theme_manager_scr2.jpg?raw=true) |  
+| **Theme installation list** |  
+ ![Selection Menu](https://github.com/seb3773/Konsole-little-theme-manager/blob/main/screenshots/konsole_theme_manager_scr3.jpg?raw=true) |  
